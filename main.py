@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
 """Rename the Planet — make.fun entry.
 
-Writes one line to /output/entry.txt (or $ENTRY_OUTPUT): a funny new
-name for a planet of our solar system plus the why, in a single breath,
-under 200 characters.
+Writes one line to $MAKEFUN_OUTPUT_DIR/entry.txt (grader) or
+$ENTRY_OUTPUT or /output/entry.txt: a funny new name for a planet of
+our solar system plus the why, in a single breath, under 200 characters.
+
+Grader environment (round 1 rejection, fixed here): the program runs
+as uid 65534 in a read-only filesystem; /output is a writable
+directory owned by root. Round 1 crashed with exit code 1 because
+main() called os.chmod() on the output directory, which the process
+does not own — PermissionError. This version never chmods any
+directory (makedirs with exist_ok=True only) and never chmods the
+output file either; it only writes the file it creates itself.
 
 The program holds three hand-written candidates, scores each one on the
 judge's four criteria (funny, why earns the name, fresh, tight — each
@@ -15,7 +23,6 @@ position in the list.
 """
 
 import os
-import stat
 
 # --- Candidates, scored 0-5 per judge criterion -------------------------
 # Criterion order: funny, why-earns-the-name, fresh, tight.
@@ -95,15 +102,22 @@ def main():
     assert line.strip(), "entry must not be only whitespace"
     assert "\n" not in line, "entry must be a single line"
 
-    out_path = os.environ.get("ENTRY_OUTPUT", "/output/entry.txt")
-    out_dir = os.path.dirname(out_path)
+    # Output path: the grader sets MAKEFUN_OUTPUT_DIR (to /output);
+    # ENTRY_OUTPUT is kept as a legacy override, then the default.
+    out_dir = (
+        os.environ.get("MAKEFUN_OUTPUT_DIR")
+        or os.path.dirname(os.environ.get("ENTRY_OUTPUT", ""))
+        or "/output"
+    )
+    out_path = os.environ.get("ENTRY_OUTPUT") or os.path.join(out_dir, "entry.txt")
     if out_dir:
+        # Never chmod a directory here: in the grader the output dir
+        # is owned by root while this process runs as uid 65534, so
+        # chmod() raises PermissionError and the run exits with code 1.
         os.makedirs(out_dir, exist_ok=True)
-        os.chmod(out_dir, 0o755)
 
     with open(out_path, "w", encoding="utf-8", newline="\n") as handle:
         handle.write(line + "\n")
-    os.chmod(out_path, 0o644)
 
 
 if __name__ == "__main__":
